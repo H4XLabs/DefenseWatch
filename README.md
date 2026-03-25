@@ -10,9 +10,13 @@
 
 ## Screenshots
 
-| Dashboard | Attack Map | SSH Events |
-|-----------|------------|------------|
-| ![Dashboard](docs/dashboard.png) | ![Attack Map](docs/attack_map.png) | ![SSH Events](docs/ssh_event.png) |
+| Dashboard | Attack Map |
+|-----------|------------|
+| ![Dashboard](docs/dashboard.png) | ![Attack Map](docs/attack_map.png) |
+
+| SSH Events | Firewall Management |
+|------------|---------------------|
+| ![SSH Events](docs/ssh_event.png) | ![Firewall](docs/firewall.png) |
 
 ---
 
