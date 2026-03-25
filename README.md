@@ -10,13 +10,24 @@
 
 ## Screenshots
 
-| Dashboard | Attack Map |
-|-----------|------------|
-| ![Dashboard](docs/dashboard.png) | ![Attack Map](docs/attack_map.png) |
-
-| SSH Events | Firewall Management |
-|------------|---------------------|
-| ![SSH Events](docs/ssh_event.png) | ![Firewall](docs/firewall.png) |
+<table>
+  <tr>
+    <td><strong>Dashboard</strong></td>
+    <td><strong>Attack Map</strong></td>
+  </tr>
+  <tr>
+    <td><img src="docs/dashboard.png" width="450" alt="Dashboard"></td>
+    <td><img src="docs/attack_map.png" width="450" alt="Attack Map"></td>
+  </tr>
+  <tr>
+    <td><strong>SSH Events</strong></td>
+    <td><strong>Firewall Management</strong></td>
+  </tr>
+  <tr>
+    <td><img src="docs/ssh_event.png" width="450" alt="SSH Events"></td>
+    <td><img src="docs/firewall.png" width="450" alt="Firewall Management"></td>
+  </tr>
+</table>
 
 ---
 
