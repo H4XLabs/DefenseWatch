@@ -1334,6 +1334,13 @@ h2.text-lg {
   display: none;
 }
 
+#section-honeypot .ip-link {
+  color: #fff;
+}
+#section-honeypot .ip-link:hover {
+  text-decoration: underline;
+}
+
 /* Honeypot flow diagram */
 .hp-flow {
   display: flex;

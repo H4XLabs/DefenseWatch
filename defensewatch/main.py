@@ -150,7 +150,10 @@ async def lifespan(app: FastAPI):
         logger.info(f"Telegram reports enabled ({', '.join(schedules)} at {config.telegram.report_hour}:00)")
 
     # Firewall auto-block loop
-    from defensewatch.firewall import detect_backend
+    from defensewatch.firewall import detect_backend, set_backend
+    if config.firewall.backend:
+        set_backend(config.firewall.backend)
+        logger.info(f"Firewall backend forced to: {config.firewall.backend}")
     fw_backend = detect_backend()
     if fw_backend:
         asyncio.create_task(_firewall_loop(config, manager))

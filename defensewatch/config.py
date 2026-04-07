@@ -160,6 +160,7 @@ class ThreatIntelConfig:
     refresh_interval_hours: int = 6
     abuseipdb_api_key: str = ""
     otx_api_key: str = ""
+    greynoise_api_key: str = ""
 
 
 @dataclass
@@ -181,6 +182,7 @@ class NucleiConfig:
 
 @dataclass
 class FirewallConfig:
+    backend: str = ""  # override auto-detection: "ufw", "nftables", "iptables", or "" for auto
     auto_block_enabled: bool = False
     ssh_block_threshold: int = 20       # failed attempts within window
     brute_session_block_threshold: int = 3  # brute force sessions within window
@@ -394,6 +396,9 @@ def load_config(path: str = "config.yaml") -> AppConfig:
     otx_key = os.environ.get("DEFENSEWATCH_OTX_API_KEY")
     if otx_key:
         config.threat_intel.otx_api_key = otx_key
+    greynoise_key = os.environ.get("DEFENSEWATCH_GREYNOISE_API_KEY")
+    if greynoise_key:
+        config.threat_intel.greynoise_api_key = greynoise_key
 
     # Reports webhook from env
     reports_webhook = os.environ.get("DEFENSEWATCH_REPORTS_WEBHOOK_URL")

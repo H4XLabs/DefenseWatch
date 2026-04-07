@@ -65,6 +65,7 @@ class WebhookSettings(BaseModel):
 class ApiKeySettings(BaseModel):
     abuseipdb_api_key: str | None = None
     otx_api_key: str | None = None
+    greynoise_api_key: str | None = None
     shodan_api_key: str | None = None
     virustotal_api_key: str | None = None
     censys_api_id: str | None = None
@@ -148,6 +149,7 @@ async def settings_status():
             "threat_intel_refresh_hours": c.threat_intel.refresh_interval_hours,
             "abuseipdb_api_key_set": bool(c.threat_intel.abuseipdb_api_key),
             "otx_api_key_set": bool(c.threat_intel.otx_api_key),
+            "greynoise_api_key_set": bool(c.threat_intel.greynoise_api_key),
             "shodan_api_key_set": bool(c.external_apis.shodan_api_key),
             "virustotal_api_key_set": bool(c.external_apis.virustotal_api_key),
             "censys_api_id_set": bool(c.external_apis.censys_api_id),
@@ -239,6 +241,9 @@ async def update_api_keys(body: ApiKeySettings):
     if body.otx_api_key is not None:
         ti.otx_api_key = body.otx_api_key
         _set_env_value("DEFENSEWATCH_OTX_API_KEY", body.otx_api_key)
+    if body.greynoise_api_key is not None:
+        ti.greynoise_api_key = body.greynoise_api_key
+        _set_env_value("DEFENSEWATCH_GREYNOISE_API_KEY", body.greynoise_api_key)
 
     ea = _config.external_apis
     if body.shodan_api_key is not None:
@@ -414,6 +419,7 @@ def _write_config_to_disk():
             "refresh_interval_hours": _config.threat_intel.refresh_interval_hours,
             "abuseipdb_api_key": "",
             "otx_api_key": "",
+            "greynoise_api_key": "",
         },
         "reports": {
             "enabled": _config.reports.enabled,

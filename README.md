@@ -89,17 +89,31 @@ Log Files ──> Watchdog ──> Parsers ──> SQLite (WAL mode)
 ```bash
 git clone https://github.com/H4XLabs/DefenseWatch.git
 cd DefenseWatch
-chmod +x setup.sh run.sh
+chmod +x setup.sh start.sh
 ./setup.sh
 ```
 
-The setup script will:
+`setup.sh` will prompt for your sudo password once and then automatically handle all system-level permissions. Specifically, it will:
+
 1. Validate Python 3.11+ and create a virtual environment
 2. Install all Python dependencies
 3. Create the `data/` directory for SQLite and GeoIP databases
 4. Generate `config.yaml` and `.env` from templates
-5. Validate log file access, firewall capabilities, and Docker availability
-6. Optionally install a systemd service unit
+5. **Add your user to the `adm` group** so DefenseWatch can read `/var/log/auth.log` and other system logs
+6. **Write `/etc/sudoers.d/defensewatch`** so DefenseWatch can execute firewall commands (`nft`/`ufw`/`iptables`) without a password prompt — required for the auto-block feature
+7. **Add your user to the `docker` group** (if Docker is installed) for the Nuclei vulnerability scanner
+8. Optionally install and enable a systemd service unit
+
+Every `sudo` command run by the script is printed to the terminal before it executes so you can see exactly what is happening:
+
+```
+[sudo] usermod -aG adm zmk
+[sudo] Writing /etc/sudoers.d/defensewatch: zmk ALL=(root) NOPASSWD: /usr/sbin/nft
+[sudo] chmod 440 /etc/sudoers.d/defensewatch
+[sudo] usermod -aG docker zmk
+```
+
+> **Note:** If you skip the sudo prompt, DefenseWatch will still start but firewall auto-blocking will be disabled and log files may not be readable until you grant access manually (see [Firewall Access](#firewall-access-passwordless-sudo) below).
 
 For non-interactive installs (e.g., CI/CD):
 ```bash
@@ -127,17 +141,13 @@ Then edit `.env` to add API keys for enhanced features:
 nano .env
 ```
 
-### 3. Grant Log Access
+### 3. Run
 
 ```bash
-sudo usermod -aG adm $USER
-# Log out and back in for this to take effect
-```
-
-### 4. Run
-
-```bash
-./run.sh
+./start.sh            # Start (default)
+./start.sh stop       # Stop
+./start.sh restart    # Restart
+./start.sh status     # Check if running
 ```
 
 Open **http://127.0.0.1:9000** in your browser.
@@ -292,9 +302,45 @@ Download `GeoLite2-City.mmdb` from [MaxMind](https://dev.maxmind.com/geoip/geoli
 
 ### Firewall Access (Passwordless sudo)
 
+DefenseWatch calls `sudo ufw`, `sudo nft`, or `sudo iptables` to block/unblock IPs. Without passwordless sudo, the Firewall tab will show *"Cannot execute firewall commands"*.
+
+First, identify your firewall backend:
+
 ```bash
-echo "$USER ALL=(ALL) NOPASSWD: /usr/sbin/ufw" | sudo tee /etc/sudoers.d/defensewatch
+command -v ufw && echo ufw || command -v nft && echo nftables || command -v iptables && echo iptables
 ```
+
+Then create a sudoers drop-in for the matching backend:
+
+**nftables** (most common on modern Debian/Ubuntu):
+```bash
+echo "$USER ALL=(root) NOPASSWD: /usr/sbin/nft" | sudo tee /etc/sudoers.d/defensewatch
+sudo chmod 440 /etc/sudoers.d/defensewatch
+```
+
+**ufw**:
+```bash
+echo "$USER ALL=(root) NOPASSWD: /usr/sbin/ufw" | sudo tee /etc/sudoers.d/defensewatch
+sudo chmod 440 /etc/sudoers.d/defensewatch
+```
+
+**iptables**:
+```bash
+echo "$USER ALL=(root) NOPASSWD: /usr/sbin/iptables" | sudo tee /etc/sudoers.d/defensewatch
+sudo chmod 440 /etc/sudoers.d/defensewatch
+```
+
+If you use multiple backends, you can include all three in one file:
+```bash
+sudo tee /etc/sudoers.d/defensewatch << EOF
+$USER ALL=(root) NOPASSWD: /usr/sbin/nft
+$USER ALL=(root) NOPASSWD: /usr/sbin/ufw
+$USER ALL=(root) NOPASSWD: /usr/sbin/iptables
+EOF
+sudo chmod 440 /etc/sudoers.d/defensewatch
+```
+
+Verify with `sudo -n nft list ruleset` (should run without a password prompt).
 
 ### Docker (Nuclei Scanner)
 
@@ -356,7 +402,7 @@ DefenseWatch/
 ├── config.yaml.example          # Configuration template
 ├── .env.example                 # Secrets template
 ├── setup.sh                     # Installation and validation script
-├── run.sh                       # Start script (reads config.yaml)
+├── start.sh                     # Start/stop/restart script (reads config.yaml)
 ├── defensewatch.service         # systemd unit file template
 ├── Dockerfile
 ├── docker-compose.yml

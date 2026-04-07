@@ -28,6 +28,12 @@ _NFT_TABLE = "defensewatch"
 _NFT_CHAIN = "blocklist"
 
 
+def set_backend(name: str) -> None:
+    """Force a specific firewall backend, bypassing auto-detection."""
+    global _backend
+    _backend = name if name else None
+
+
 def detect_backend() -> str | None:
     """Return the firewall backend available on this host."""
     global _backend

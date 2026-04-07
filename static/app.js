@@ -876,6 +876,19 @@ function renderThreatIntelData(threatIntel) {
         `;
     }
 
+    if (data.greynoise) {
+        const gn = data.greynoise;
+        const classBadge = gn.classification === 'malicious' ? 'badge-critical' : gn.classification === 'benign' ? 'badge-resolved' : 'badge-low';
+        html += `
+            <div class="mt-2 font-semibold text-gray-300">GreyNoise</div>
+            <div><span class="text-gray-500">Classification:</span> <span class="badge ${classBadge}">${gn.classification || 'unknown'}</span></div>
+            <div><span class="text-gray-500">Noise:</span> ${gn.noise ? 'Yes (seen scanning)' : 'No'}</div>
+            <div><span class="text-gray-500">RIOT:</span> ${gn.riot ? 'Yes (benign service)' : 'No'}</div>
+            ${gn.name ? `<div><span class="text-gray-500">Name:</span> ${gn.name}</div>` : ''}
+            ${gn.link ? `<div><a href="${gn.link}" target="_blank" class="text-blue-400 text-xs hover:underline">View on GreyNoise</a></div>` : ''}
+        `;
+    }
+
     html += `
         <div class="text-xs text-gray-500 mt-2">Updated: ${formatTime(threatIntel.checked_at)}</div>
     </div>`;
@@ -2760,6 +2773,7 @@ function populateApiKeys(ak) {
     const keyStatuses = [
         ['set-abuseipdb-status', ak.abuseipdb_api_key_set],
         ['set-otx-status', ak.otx_api_key_set],
+        ['set-greynoise-status', ak.greynoise_api_key_set],
         ['set-shodan-status', ak.shodan_api_key_set],
         ['set-vt-status', ak.virustotal_api_key_set],
         ['set-censys-id-status', ak.censys_api_id_set],
@@ -2784,6 +2798,7 @@ document.getElementById('set-apikeys-save')?.addEventListener('click', async () 
     const fields = [
         ['set-abuseipdb-key', 'abuseipdb_api_key'],
         ['set-otx-key', 'otx_api_key'],
+        ['set-greynoise-key', 'greynoise_api_key'],
         ['set-shodan-key', 'shodan_api_key'],
         ['set-vt-key', 'virustotal_api_key'],
         ['set-censys-id', 'censys_api_id'],

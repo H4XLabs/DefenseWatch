@@ -10,6 +10,7 @@ logger = logging.getLogger(__name__)
 
 _ABUSEIPDB_CHECK = "https://api.abuseipdb.com/api/v2/check"
 _OTX_INDICATOR = "https://otx.alienvault.com/api/v1/indicators/IPv4/{ip}/general"
+_GREYNOISE_COMMUNITY = "https://api.greynoise.io/v3/community/{ip}"
 
 
 async def check_abuseipdb(ip: str, api_key: str, timeout: float = 10.0) -> dict | None:
@@ -62,6 +63,30 @@ async def check_otx(ip: str, api_key: str, timeout: float = 10.0) -> dict | None
         return None
 
 
+async def check_greynoise(ip: str, api_key: str, timeout: float = 10.0) -> dict | None:
+    try:
+        async with httpx.AsyncClient(timeout=timeout) as client:
+            resp = await client.get(
+                _GREYNOISE_COMMUNITY.format(ip=ip),
+                headers={"key": api_key, "Accept": "application/json"},
+            )
+            if resp.status_code != 200:
+                logger.debug(f"GreyNoise returned {resp.status_code} for {ip}")
+                return None
+            data = resp.json()
+            return {
+                "noise": data.get("noise", False),
+                "riot": data.get("riot", False),
+                "classification": data.get("classification", "unknown"),
+                "name": data.get("name", ""),
+                "link": data.get("link", ""),
+                "message": data.get("message", ""),
+            }
+    except Exception as e:
+        logger.debug(f"GreyNoise lookup failed for {ip}: {e}")
+        return None
+
+
 async def enrich_ip_threat_intel(ip: str, config: ThreatIntelConfig) -> dict | None:
     """Run all configured threat intel checks for an IP and cache results."""
     if not config.enabled:
@@ -74,6 +99,8 @@ async def enrich_ip_threat_intel(ip: str, config: ThreatIntelConfig) -> dict | N
         tasks.append(("abuseipdb", check_abuseipdb(ip, config.abuseipdb_api_key)))
     if config.otx_api_key:
         tasks.append(("otx", check_otx(ip, config.otx_api_key)))
+    if config.greynoise_api_key:
+        tasks.append(("greynoise", check_greynoise(ip, config.greynoise_api_key)))
 
     if not tasks:
         return None

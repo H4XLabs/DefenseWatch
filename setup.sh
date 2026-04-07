@@ -12,6 +12,40 @@ fi
 echo "=== DefenseWatch Setup ==="
 echo ""
 
+# ── Privilege check ───────────────────────────────────────────────────
+# We run as the current user but need sudo for a few steps:
+#   - Adding the user to the adm/docker groups
+#   - Writing /etc/sudoers.d/defensewatch for firewall control
+#   - Installing the systemd service unit
+HAVE_SUDO=false
+REAL_USER="${SUDO_USER:-$USER}"
+
+# Print and execute a sudo command so the user sees exactly what runs
+sudo_run() {
+    echo "    [sudo] $*"
+    sudo "$@"
+}
+
+if sudo -n true 2>/dev/null; then
+    HAVE_SUDO=true
+    echo "[+] Sudo access available — system permissions will be configured automatically."
+elif [ "$INTERACTIVE" = true ]; then
+    echo "[i] Some steps need sudo (log access, firewall rules, optional service install)."
+    read -rp "    Authenticate with sudo now? [Y/n] " _sudo_yn
+    if [[ ! "${_sudo_yn:-y}" =~ ^[Nn]$ ]]; then
+        if sudo true 2>/dev/null; then
+            HAVE_SUDO=true
+            echo "    Sudo granted."
+        else
+            echo "    Sudo failed — system permissions will need to be set manually."
+        fi
+    fi
+fi
+if [ "$HAVE_SUDO" = false ]; then
+    echo "[!] No sudo — system permissions (group membership, sudoers, service) will need manual setup."
+fi
+echo ""
+
 # ── Python check ──────────────────────────────────────────────────────
 PYTHON=""
 for cmd in python3.12 python3.11 python3; do
@@ -227,28 +261,63 @@ while IFS= read -r logfile; do
 done <<< "$LOG_PATHS"
 
 if [ "$LOGS_OK" = false ]; then
-    echo ""
-    echo "[!] Some log files are not readable. You may need to:"
-    echo "    sudo usermod -aG adm $USER"
-    echo "    Then log out and back in."
+    if [ "$HAVE_SUDO" = true ]; then
+        echo ""
+        echo "[+] Adding $REAL_USER to the 'adm' group for log file access..."
+        sudo_run usermod -aG adm "$REAL_USER"
+        echo "    Done. Log out and back in (or run 'newgrp adm') for the change to take effect."
+    else
+        echo ""
+        echo "[!] Some log files are not readable. Run manually:"
+        echo "    sudo usermod -aG adm $USER"
+        echo "    Then log out and back in."
+    fi
 fi
 
 # ── Firewall capability check ────────────────────────────────────────
 echo ""
 echo "[+] Checking firewall capabilities..."
+_fw_backend=""
+_fw_sudo_ok=false
+
 if command -v ufw &>/dev/null; then
-    echo "    ufw found"
+    _fw_backend="ufw"
+    _fw_bin="/usr/sbin/ufw"
     if sudo -n ufw status &>/dev/null 2>&1; then
-        echo "    sudo access for ufw: yes"
-    else
-        echo "    sudo access for ufw: no (auto-block will not work without passwordless sudo)"
-        echo "    To enable, add to /etc/sudoers.d/defensewatch:"
-        echo "      $USER ALL=(ALL) NOPASSWD: /usr/sbin/ufw"
+        _fw_sudo_ok=true
+    fi
+elif command -v nft &>/dev/null; then
+    _fw_backend="nftables"
+    _fw_bin="/usr/sbin/nft"
+    if sudo -n nft list ruleset &>/dev/null 2>&1; then
+        _fw_sudo_ok=true
     fi
 elif command -v iptables &>/dev/null; then
-    echo "    iptables found (ufw not available)"
+    _fw_backend="iptables"
+    _fw_bin="/usr/sbin/iptables"
+    if sudo -n iptables -L INPUT -n &>/dev/null 2>&1; then
+        _fw_sudo_ok=true
+    fi
+fi
+
+if [ -z "$_fw_backend" ]; then
+    echo "    No firewall tool found (ufw, nftables, or iptables required for auto-block)"
 else
-    echo "    No firewall tool found (ufw or iptables required for auto-block)"
+    echo "    Backend: $_fw_backend"
+    if [ "$_fw_sudo_ok" = true ]; then
+        echo "    Passwordless sudo: yes"
+    elif [ "$HAVE_SUDO" = true ]; then
+        echo "    Passwordless sudo: configuring..."
+        echo "    [sudo] Writing /etc/sudoers.d/defensewatch: $REAL_USER ALL=(root) NOPASSWD: $_fw_bin"
+        echo "$REAL_USER ALL=(root) NOPASSWD: $_fw_bin" | sudo tee /etc/sudoers.d/defensewatch > /dev/null
+        sudo_run chmod 440 /etc/sudoers.d/defensewatch
+        echo "    Created /etc/sudoers.d/defensewatch — firewall auto-block enabled."
+    else
+        echo "    Passwordless sudo: no — firewall auto-block will not work"
+        echo "    To enable, run:"
+        echo "      echo \"$USER ALL=(root) NOPASSWD: $_fw_bin\" | sudo tee /etc/sudoers.d/defensewatch"
+        echo "      sudo chmod 440 /etc/sudoers.d/defensewatch"
+    fi
 fi
 
 # ── Docker check (for Nuclei scanner) ────────────────────────────────
@@ -260,7 +329,14 @@ if command -v docker &>/dev/null; then
         echo "    Pre-pulling Nuclei image..."
         docker pull projectdiscovery/nuclei:latest --quiet 2>/dev/null || echo "    Could not pull Nuclei image (pull manually: docker pull projectdiscovery/nuclei:latest)"
     else
-        echo "    Docker installed but not accessible (add user to docker group: sudo usermod -aG docker $USER)"
+        if [ "$HAVE_SUDO" = true ]; then
+            echo "    Docker installed — adding $REAL_USER to the 'docker' group..."
+            sudo_run usermod -aG docker "$REAL_USER"
+            echo "    Done. Log out and back in (or run 'newgrp docker') for the change to take effect."
+        else
+            echo "    Docker installed but not accessible."
+            echo "    Run: sudo usermod -aG docker $USER  (then log out and back in)"
+        fi
     fi
 else
     echo "    Docker not found (Nuclei scanner will be unavailable)"
@@ -287,6 +363,7 @@ print(c.get('server', {}).get('port', 9000))
 
         # Generate service file with correct paths, user, and config values
         SERVICE_FILE="/etc/systemd/system/defensewatch.service"
+        echo "    [sudo] Writing $SERVICE_FILE"
         sudo tee "$SERVICE_FILE" > /dev/null << EOF
 [Unit]
 Description=DefenseWatch Host Intrusion Detection System
@@ -294,7 +371,7 @@ After=network.target
 
 [Service]
 Type=simple
-User=$USER
+User=$REAL_USER
 Group=adm
 WorkingDirectory=$SCRIPT_DIR
 ExecStart=$SCRIPT_DIR/venv/bin/uvicorn defensewatch.main:app --host $SVC_HOST --port $SVC_PORT
@@ -306,8 +383,8 @@ StandardError=journal
 [Install]
 WantedBy=multi-user.target
 EOF
-        sudo systemctl daemon-reload
-        sudo systemctl enable defensewatch
+        sudo_run systemctl daemon-reload
+        sudo_run systemctl enable defensewatch
         echo "    Service installed and enabled."
         echo "    Start with: sudo systemctl start defensewatch"
         echo "    Logs:       sudo journalctl -u defensewatch -f"
@@ -336,16 +413,19 @@ echo "   - Add API keys for enrichment (Shodan, VirusTotal, etc.)"
 echo "   - Configure Telegram bot for notifications"
 echo "   - Set webhook URLs for alerts"
 echo ""
-echo "3. Ensure log file access:"
-echo "   - Your user must be in the 'adm' group"
-echo "   - Run: sudo usermod -aG adm \$USER"
-echo "   - Log out and back in for changes to take effect"
+echo "3. Log file and firewall access:"
+echo "   - If setup was run without sudo, manually run:"
+echo "       sudo usermod -aG adm \$USER          # log file read access"
+echo "       sudo usermod -aG docker \$USER        # Docker/Nuclei scanner (if applicable)"
+echo "       echo \"\$USER ALL=(root) NOPASSWD: /usr/sbin/nft\" | sudo tee /etc/sudoers.d/defensewatch"
+echo "       sudo chmod 440 /etc/sudoers.d/defensewatch"
+echo "   - Log out and back in for group changes to take effect"
 echo ""
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo "To start DefenseWatch:"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo ""
-echo "  ./run.sh"
+echo "  ./start.sh"
 echo ""
 echo "Then open: http://127.0.0.1:9000"
 echo ""
