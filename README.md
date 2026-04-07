@@ -107,10 +107,10 @@ chmod +x setup.sh start.sh
 Every `sudo` command run by the script is printed to the terminal before it executes so you can see exactly what is happening:
 
 ```
-[sudo] usermod -aG adm zmk
-[sudo] Writing /etc/sudoers.d/defensewatch: zmk ALL=(root) NOPASSWD: /usr/sbin/nft
+[sudo] usermod -aG adm [username]
+[sudo] Writing /etc/sudoers.d/defensewatch: [username] ALL=(root) NOPASSWD: /usr/sbin/nft
 [sudo] chmod 440 /etc/sudoers.d/defensewatch
-[sudo] usermod -aG docker zmk
+[sudo] usermod -aG docker [username]
 ```
 
 > **Note:** If you skip the sudo prompt, DefenseWatch will still start but firewall auto-blocking will be disabled and log files may not be readable until you grant access manually (see [Firewall Access](#firewall-access-passwordless-sudo) below).
