@@ -129,11 +129,6 @@ async def lifespan(app: FastAPI):
     # Anomaly detection and baseline computation
     asyncio.create_task(_anomaly_loop(config, manager))
 
-    # Threat intel enrichment for high-score IPs
-    if config.threat_intel.enabled:
-        asyncio.create_task(_threat_intel_loop(config))
-        logger.info("Threat intel feed enabled")
-
     # Scheduled reports
     if config.reports.enabled:
         asyncio.create_task(_report_loop(config))
@@ -231,37 +226,6 @@ async def _anomaly_loop(config, manager):
         except Exception as e:
             logger.error(f"Anomaly detection error: {e}")
         await asyncio.sleep(3600)  # Check hourly
-
-
-async def _threat_intel_loop(config):
-    """Periodically enrich top attacking IPs with threat intel."""
-    from defensewatch.enrichment.threat_intel import enrich_ip_threat_intel
-    from defensewatch.database import get_db
-    await asyncio.sleep(30)
-    while True:
-        try:
-            db = get_db()
-            # Get IPs with most activity that haven't been checked recently
-            cutoff = time.time() - (config.threat_intel.refresh_interval_hours * 3600)
-            rows = await db.execute_fetchall(
-                """SELECT ip, cnt FROM (
-                    SELECT source_ip as ip, COUNT(*) as cnt FROM (
-                        SELECT source_ip FROM ssh_events
-                        UNION ALL SELECT source_ip FROM http_events
-                    ) GROUP BY source_ip ORDER BY cnt DESC LIMIT 100
-                ) t WHERE ip NOT IN (
-                    SELECT ip FROM threat_intel_hits WHERE checked_at > ?
-                ) LIMIT 20""",
-                (cutoff,)
-            )
-            for r in rows:
-                await enrich_ip_threat_intel(r[0], config.threat_intel)
-                await asyncio.sleep(2)  # Rate limit
-            if rows:
-                logger.info(f"Threat intel enriched {len(rows)} IPs")
-        except Exception as e:
-            logger.error(f"Threat intel loop error: {e}")
-        await asyncio.sleep(config.threat_intel.refresh_interval_hours * 3600)
 
 
 async def _report_loop(config):

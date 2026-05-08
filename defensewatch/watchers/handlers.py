@@ -209,6 +209,12 @@ class SSHLogHandler(LogHandler):
                 "service_port": event.service_port,
             })
 
+            # Suppress notifications for already-blocked IPs
+            blocked = await db.execute_fetchall(
+                "SELECT 1 FROM firewall_blocks WHERE ip=? AND active=1", (event.source_ip,)
+            )
+            already_blocked = bool(blocked)
+
             # Brute force detection
             session = self.brute_tracker.track(event)
             if session and self.brute_tracker.is_new_session(event.source_ip):
@@ -219,7 +225,7 @@ class SSHLogHandler(LogHandler):
                     "attempt_count": session.attempt_count,
                     "usernames_tried": session.usernames_tried,
                 })
-                if self.notifier:
+                if self.notifier and not already_blocked:
                     await self.notifier.notify_brute_force(
                         session.source_ip, session.attempt_count,
                         session.usernames_tried)
@@ -236,7 +242,8 @@ class SSHLogHandler(LogHandler):
                 ps = self.portscan_tracker.track(
                     event.source_ip, self.service_port, event.timestamp)
                 if ps:
-                    await _store_portscan(ps, self.manager, self.notifier if hasattr(self, 'notifier') else None)
+                    notifier = None if already_blocked else (self.notifier if hasattr(self, 'notifier') else None)
+                    await _store_portscan(ps, self.manager, notifier)
 
             # Periodic cleanup
             self._event_counter += 1
@@ -377,7 +384,10 @@ class HTTPLogHandler(LogHandler):
                 "ua_class": getattr(event, 'ua_class', ''),
             })
 
-            if self.notifier and event.severity:
+            blocked = await db.execute_fetchall(
+                "SELECT 1 FROM firewall_blocks WHERE ip=? AND active=1", (event.source_ip,)
+            )
+            if self.notifier and event.severity and not blocked:
                 await self.notifier.notify_http_attack(
                     event.source_ip, event.path,
                     event.attack_types, event.severity)
@@ -476,7 +486,10 @@ class NginxErrorLogHandler(LogHandler):
                 "ua_class": getattr(event, 'ua_class', ''),
             })
 
-            if self.notifier and event.severity:
+            blocked = await db.execute_fetchall(
+                "SELECT 1 FROM firewall_blocks WHERE ip=? AND active=1", (event.source_ip,)
+            )
+            if self.notifier and event.severity and not blocked:
                 await self.notifier.notify_http_attack(
                     event.source_ip, event.path,
                     event.attack_types, event.severity)

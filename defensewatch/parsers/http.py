@@ -44,7 +44,7 @@ _ATTACK_PATTERNS: list[tuple[str, re.Pattern, str]] = [
     # Medium
     ('cms_probe', re.compile(r'(?:wp-login|wp-admin|xmlrpc\.php|wp-content|wp-includes|/administrator|/joomla|/drupal|/magento)', re.I), 'medium'),
     ('ssrf', re.compile(r'(?:gopher://|dict://|file://|localhost|127\.0\.0\.1|169\.254\.169\.254|0x7f)', re.I), 'medium'),
-    ('actuator_probe', re.compile(r'(?:/actuator|/swagger|/api-docs|/metrics|/prometheus|/health(?:check)?|/debug|/trace|/info|/beans|/configprops)', re.I), 'medium'),
+    ('actuator_probe', re.compile(r'(?:/actuator|/swagger|/api-docs|/metrics|/prometheus|/healthcheck|/debug|/trace|/info|/beans|/configprops)', re.I), 'medium'),
 
     # Low
     ('endpoint_enum', re.compile(r'(?:/admin|/phpmyadmin|/pma|/myadmin|/manager|/console|/solr|/jenkins|/\.bak|\.sql$|\.tar\.gz$|/backup|/dump|/test|/debug|/status|/server-status)', re.I), 'low'),
